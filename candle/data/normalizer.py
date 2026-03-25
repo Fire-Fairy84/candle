@@ -30,4 +30,22 @@ def normalize(raw: RawOHLCV) -> pd.DataFrame:
     Raises:
         ValueError: If raw is empty or has an unexpected column count.
     """
-    ...
+    if not raw:
+        raise ValueError("raw OHLCV data is empty")
+
+    if any(len(row) != 6 for row in raw):
+        raise ValueError(
+            f"each OHLCV row must have exactly 6 columns, got rows with "
+            f"{set(len(r) for r in raw)}"
+        )
+
+    df = pd.DataFrame(raw, columns=OHLCV_COLUMNS)
+
+    df["timestamp"] = pd.to_datetime(df["timestamp"], unit="ms", utc=True)
+
+    numeric_cols = ["open", "high", "low", "close", "volume"]
+    df[numeric_cols] = df[numeric_cols].astype("float64")
+
+    df = df.sort_values("timestamp").drop_duplicates(subset=["timestamp"]).reset_index(drop=True)
+
+    return df
