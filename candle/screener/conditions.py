@@ -28,7 +28,22 @@ def ema_crossover(df: pd.DataFrame, fast: int, slow: int) -> bool:
         KeyError: If the expected EMA columns are not present in df.
         ValueError: If df has fewer than 2 rows.
     """
-    ...
+    if len(df) < 2:
+        raise ValueError(f"ema_crossover requires at least 2 rows, got {len(df)}")
+
+    fast_col = f"ema_{fast}"
+    slow_col = f"ema_{slow}"
+
+    for col in (fast_col, slow_col):
+        if col not in df.columns:
+            raise KeyError(f"column '{col}' not found in DataFrame")
+
+    prev_fast = df[fast_col].iloc[-2]
+    prev_slow = df[slow_col].iloc[-2]
+    last_fast = df[fast_col].iloc[-1]
+    last_slow = df[slow_col].iloc[-1]
+
+    return bool(prev_fast < prev_slow and last_fast >= last_slow)
 
 
 def rsi_range(df: pd.DataFrame, min_val: float, max_val: float) -> bool:
@@ -45,7 +60,10 @@ def rsi_range(df: pd.DataFrame, min_val: float, max_val: float) -> bool:
     Raises:
         KeyError: If "rsi" column is not present in df.
     """
-    ...
+    if "rsi" not in df.columns:
+        raise KeyError("column 'rsi' not found in DataFrame")
+
+    return bool(min_val <= df["rsi"].iloc[-1] <= max_val)
 
 
 def price_above_vwap(df: pd.DataFrame) -> bool:
@@ -60,11 +78,18 @@ def price_above_vwap(df: pd.DataFrame) -> bool:
     Raises:
         KeyError: If "close" or "vwap" columns are not present in df.
     """
-    ...
+    for col in ("close", "vwap"):
+        if col not in df.columns:
+            raise KeyError(f"column '{col}' not found in DataFrame")
+
+    return bool(df["close"].iloc[-1] > df["vwap"].iloc[-1])
 
 
 def volume_spike(df: pd.DataFrame, multiplier: float, window: int = 20) -> bool:
     """Return True if the latest candle's volume exceeds the rolling average by multiplier.
+
+    The rolling average is computed over the `window` candles preceding the
+    current one (no look-ahead bias — the current candle is excluded).
 
     Args:
         df: DataFrame with a "volume" column.
@@ -73,10 +98,19 @@ def volume_spike(df: pd.DataFrame, multiplier: float, window: int = 20) -> bool:
         window: Rolling window size in candles. Defaults to 20.
 
     Returns:
-        True if volume >= rolling_mean * multiplier, False otherwise.
+        True if volume[-1] >= rolling_mean * multiplier, False otherwise.
 
     Raises:
         KeyError: If "volume" column is not present in df.
-        ValueError: If df has fewer rows than window.
+        ValueError: If df has fewer than window + 1 rows.
     """
-    ...
+    if "volume" not in df.columns:
+        raise KeyError("column 'volume' not found in DataFrame")
+
+    if len(df) < window + 1:
+        raise ValueError(
+            f"volume_spike requires at least {window + 1} rows (window={window}), got {len(df)}"
+        )
+
+    rolling_mean = df["volume"].iloc[-(window + 1):-1].mean()
+    return bool(df["volume"].iloc[-1] >= rolling_mean * multiplier)

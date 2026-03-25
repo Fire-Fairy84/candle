@@ -31,10 +31,13 @@ class Rule:
     def evaluate(self, df: pd.DataFrame) -> bool:
         """Return True if all conditions are met on the given DataFrame.
 
+        Short-circuits on the first False condition. Returns True vacuously
+        when the conditions list is empty.
+
         Args:
             df: DataFrame with OHLCV data and pre-computed indicator columns.
 
         Returns:
             True if every condition returns True, False if any returns False.
         """
-        ...
+        return all(condition(df) for condition in self.conditions)

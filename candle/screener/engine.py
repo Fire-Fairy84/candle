@@ -46,4 +46,15 @@ def run(
         List of RuleMatch for every rule whose conditions all returned True.
         Returns an empty list if no rules matched.
     """
-    ...
+    matches = []
+    for rule in rules:
+        if rule.evaluate(df):
+            matches.append(
+                RuleMatch(
+                    rule=rule,
+                    symbol=symbol,
+                    timeframe=timeframe,
+                    message=f"[{symbol} {timeframe}] {rule.name}",
+                )
+            )
+    return matches
