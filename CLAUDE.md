@@ -203,6 +203,16 @@ DEFAULT_TIMEFRAME=4h
 
 ---
 
+## Language conventions
+
+- All code in English: variable names, function names, class names, comments
+- All docstrings in English
+- All log messages in English
+- Commit messages in English following Conventional Commits:
+  `feat:`, `fix:`, `chore:`, `refactor:`, `test:`, `docs:`
+- README and internal technical docs in English
+- CLAUDE.md can be updated in Spanish by the developer
+
 ## Coding conventions
 
 - **Type hints on every function signature.** No bare `dict` — use TypedDict or Pydantic models.
