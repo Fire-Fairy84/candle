@@ -1,0 +1,44 @@
+"""Application configuration loaded from environment variables via pydantic-settings.
+
+Single Settings instance exported as `settings`. All other modules import from here.
+"""
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    """Typed configuration for the Candle application."""
+
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # Database
+    database_url: str
+    database_url_test: str = ""
+
+    # Exchanges (all optional — public OHLCV requires no keys)
+    binance_api_key: str = ""
+    binance_api_secret: str = ""
+    kraken_api_key: str = ""
+    kraken_api_secret: str = ""
+    coinbase_api_key: str = ""
+    coinbase_api_secret: str = ""
+
+    # Telegram
+    telegram_bot_token: str = ""
+    telegram_chat_id: str = ""
+
+    # Scheduler
+    fetch_interval_minutes: int = 60
+    screen_interval_minutes: int = 60
+    default_timeframe: str = "4h"
+
+    # App
+    env: str = "development"
+
+    @property
+    def is_production(self) -> bool:
+        """Return True when running in production environment."""
+        return self.env == "production"
+
+
+settings = Settings()
