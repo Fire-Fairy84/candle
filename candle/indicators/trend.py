@@ -14,7 +14,7 @@ def ema(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
     Returns:
         Series of EMA values, aligned with df index. Leading values are NaN.
     """
-    ...
+    return df[column].ewm(span=period, adjust=False, min_periods=period).mean()
 
 
 def sma(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
@@ -28,7 +28,7 @@ def sma(df: pd.DataFrame, period: int, column: str = "close") -> pd.Series:
     Returns:
         Series of SMA values, aligned with df index. Leading values are NaN.
     """
-    ...
+    return df[column].rolling(window=period).mean()
 
 
 def macd(
@@ -49,4 +49,13 @@ def macd(
         DataFrame with columns: macd, macd_signal, macd_histogram.
         Leading values are NaN until enough data is available.
     """
-    ...
+    close = df["close"]
+    ema_fast = close.ewm(span=fast, adjust=False, min_periods=fast).mean()
+    ema_slow = close.ewm(span=slow, adjust=False, min_periods=slow).mean()
+    macd_line = ema_fast - ema_slow
+    signal_line = macd_line.ewm(span=signal, adjust=False, min_periods=signal).mean()
+    histogram = macd_line - signal_line
+    return pd.DataFrame(
+        {"macd": macd_line, "macd_signal": signal_line, "macd_histogram": histogram},
+        index=df.index,
+    )

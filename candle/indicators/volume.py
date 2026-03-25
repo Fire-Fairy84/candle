@@ -15,7 +15,8 @@ def vwap(df: pd.DataFrame) -> pd.Series:
     Returns:
         Series of VWAP values, aligned with df index. No NaN values.
     """
-    ...
+    typical_price = (df["high"] + df["low"] + df["close"]) / 3
+    return (typical_price * df["volume"]).cumsum() / df["volume"].cumsum()
 
 
 def obv(df: pd.DataFrame) -> pd.Series:
@@ -27,7 +28,9 @@ def obv(df: pd.DataFrame) -> pd.Series:
     Returns:
         Series of cumulative OBV values, aligned with df index.
     """
-    ...
+    direction = df["close"].diff().apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    direction.iloc[0] = 0
+    return (direction * df["volume"]).cumsum()
 
 
 def cvd(df: pd.DataFrame) -> pd.Series:
@@ -42,4 +45,6 @@ def cvd(df: pd.DataFrame) -> pd.Series:
     Returns:
         Series of cumulative volume delta values, aligned with df index.
     """
-    ...
+    delta = df["close"] - df["open"]
+    direction = delta.apply(lambda x: 1 if x > 0 else (-1 if x < 0 else 0))
+    return (direction * df["volume"]).cumsum()
