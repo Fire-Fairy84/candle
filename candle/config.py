@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     fetch_interval_minutes: int = 60
     screen_interval_minutes: int = 60
     default_timeframe: str = "4h"
+    alert_dedup_hours: int = 4
 
     # App
     env: str = "development"

@@ -1,6 +1,7 @@
 """Tests for candle.alerts.telegram."""
 
 import pytest
+from telegram.error import TelegramError
 
 from candle.alerts.telegram import format_message, send_alert
 from candle.screener.engine import RuleMatch
@@ -19,28 +20,65 @@ def sample_match() -> RuleMatch:
     )
 
 
+@pytest.fixture
+def mock_bot(mocker):
+    """A mock telegram.Bot that captures send_message calls."""
+    bot = mocker.AsyncMock()
+    mocker.patch("candle.alerts.telegram.Bot", return_value=bot)
+    return bot
+
+
 class TestFormatMessage:
     def test_includes_symbol(self, sample_match):
         """Formatted message must include the trading pair symbol."""
-        ...
+        assert "BTC/USDT" in format_message(sample_match)
 
     def test_includes_rule_name(self, sample_match):
         """Formatted message must include the rule name."""
-        ...
+        assert "EMA Crossover + RSI Oversold" in format_message(sample_match)
 
     def test_includes_timeframe(self, sample_match):
         """Formatted message must include the timeframe."""
-        ...
+        assert "4h" in format_message(sample_match)
 
     def test_returns_string(self, sample_match):
-        ...
+        assert isinstance(format_message(sample_match), str)
 
 
 class TestSendAlert:
     async def test_calls_telegram_with_formatted_message(self, sample_match, mock_telegram, mocker):
         """send_alert must call the Telegram bot with the formatted message."""
-        ...
+        await send_alert(sample_match, bot=mock_telegram)
+
+        mock_telegram.send_message.assert_called_once()
+        call_kwargs = mock_telegram.send_message.call_args.kwargs
+        assert "BTC/USDT" in call_kwargs["text"]
+        assert "EMA Crossover + RSI Oversold" in call_kwargs["text"]
+
+    async def test_send_alert_passes_chat_id(self, sample_match, mock_telegram, mocker):
+        """send_alert must use the chat_id from settings."""
+        mocker.patch("candle.alerts.telegram.settings.telegram_chat_id", "99999")
+        await send_alert(sample_match, bot=mock_telegram)
+        call_kwargs = mock_telegram.send_message.call_args.kwargs
+        assert call_kwargs["chat_id"] == "99999"
+
+    async def test_send_alert_uses_markdown_parse_mode(self, sample_match, mock_telegram):
+        """send_alert must request Markdown formatting."""
+        await send_alert(sample_match, bot=mock_telegram)
+        call_kwargs = mock_telegram.send_message.call_args.kwargs
+        assert call_kwargs["parse_mode"] == "Markdown"
 
     async def test_skips_send_when_token_not_configured(self, sample_match, mocker):
         """send_alert must not call the Telegram API when bot token is empty."""
-        ...
+        mocker.patch("candle.alerts.telegram.settings.telegram_bot_token", "")
+        mock_bot_class = mocker.patch("candle.alerts.telegram.Bot")
+
+        await send_alert(sample_match)  # no bot passed — should detect empty token
+
+        mock_bot_class.assert_not_called()
+
+    async def test_propagates_telegram_error(self, sample_match, mock_telegram):
+        """TelegramError raised by the bot must propagate to the caller."""
+        mock_telegram.send_message.side_effect = TelegramError("network failure")
+        with pytest.raises(TelegramError, match="network failure"):
+            await send_alert(sample_match, bot=mock_telegram)
