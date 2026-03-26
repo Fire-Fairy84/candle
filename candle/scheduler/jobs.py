@@ -279,8 +279,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if args.once:
-        asyncio.run(fetch_job())
-        asyncio.run(screen_job())
+        async def _run_once() -> None:
+            await fetch_job()
+            await screen_job()
+
+        asyncio.run(_run_once())
     else:
         scheduler = build_scheduler()
         scheduler.start()
