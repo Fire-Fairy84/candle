@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import (
 
 from candle.config import settings
 
+print(f"[DEBUG] DATABASE_URL raw value: {settings.database_url!r}", flush=True)
 
 _db_url = settings.database_url.replace(
     "postgresql://", "postgresql+asyncpg://", 1
