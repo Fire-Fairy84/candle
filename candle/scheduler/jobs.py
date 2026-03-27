@@ -251,6 +251,7 @@ def build_scheduler() -> AsyncIOScheduler:
         An APScheduler AsyncIOScheduler with fetch_job and screen_job registered
         according to FETCH_INTERVAL_MINUTES and SCREEN_INTERVAL_MINUTES from settings.
     """
+    now = datetime.now(tz=timezone.utc)
     scheduler = AsyncIOScheduler()
     scheduler.add_job(
         fetch_job,
@@ -258,6 +259,7 @@ def build_scheduler() -> AsyncIOScheduler:
         id="fetch_job",
         name="Fetch OHLCV candles",
         misfire_grace_time=300,
+        next_run_time=now,
     )
     scheduler.add_job(
         screen_job,
@@ -265,6 +267,7 @@ def build_scheduler() -> AsyncIOScheduler:
         id="screen_job",
         name="Screen rules and send alerts",
         misfire_grace_time=300,
+        next_run_time=now,
     )
     return scheduler
 
