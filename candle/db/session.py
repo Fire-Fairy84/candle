@@ -4,6 +4,7 @@ All database access goes through get_session(). Never create engine or sessions
 outside this module.
 """
 
+import os
 from collections.abc import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import (
@@ -22,6 +23,7 @@ _session_factory: async_sessionmaker[AsyncSession] | None = None
 def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
+        print("ENV VARS:", {k: v for k, v in os.environ.items() if 'DATABASE' in k or 'POSTGRES' in k}, flush=True)
         db_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         _engine = create_async_engine(
             db_url,
