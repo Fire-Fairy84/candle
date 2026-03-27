@@ -24,7 +24,7 @@ def _get_engine() -> AsyncEngine:
     global _engine
     if _engine is None:
         print("ENV VARS:", {k: v for k, v in os.environ.items() if 'DATABASE' in k or 'POSTGRES' in k}, flush=True)
-        db_url = settings.database_url.replace("postgresql://", "postgresql+asyncpg://", 1)
+        db_url = settings.candle_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
         _engine = create_async_engine(
             db_url,
             echo=not settings.is_production,

@@ -17,7 +17,7 @@ from candle.db.models import Base
 @pytest_asyncio.fixture(scope="session")
 async def test_engine():
     """Create the test database schema once per session, drop it on teardown."""
-    engine = create_async_engine(settings.database_url_test, echo=False)
+    engine = create_async_engine(settings.candle_db_url_test, echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     yield engine

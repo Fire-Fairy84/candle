@@ -12,8 +12,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
     # Database
-    database_url: str
-    database_url_test: str = ""
+    candle_db_url: str
+    candle_db_url_test: str = ""
 
     # Exchanges (all optional — public OHLCV requires no keys)
     binance_api_key: str = ""
