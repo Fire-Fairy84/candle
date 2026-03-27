@@ -4,5 +4,6 @@ dockerfilePath = "Dockerfile"
 
 [deploy]
 startCommand = "python scripts/run.py"
+releaseCommand = "alembic upgrade head"
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 5
