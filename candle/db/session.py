@@ -15,8 +15,12 @@ from sqlalchemy.ext.asyncio import (
 from candle.config import settings
 
 
+_db_url = settings.database_url.replace(
+    "postgresql://", "postgresql+asyncpg://", 1
+)
+
 engine = create_async_engine(
-    settings.database_url,
+    _db_url,
     echo=not settings.is_production,
     pool_pre_ping=True,
 )
