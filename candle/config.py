@@ -3,9 +3,6 @@
 Single Settings instance exported as `settings`. All other modules import from here.
 """
 
-import os
-
-from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,7 +11,7 @@ class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    # Database — optional so the validator can build it from PG* vars as fallback
+    # Database — resolved lazily in db/session.py, not validated here
     candle_db_url: str = ""
     candle_db_url_test: str = ""
 
@@ -38,26 +35,6 @@ class Settings(BaseSettings):
 
     # App
     env: str = "development"
-
-    @model_validator(mode="after")
-    def resolve_db_url(self) -> "Settings":
-        """Build candle_db_url from Railway's PG* variables if not set directly."""
-        if not self.candle_db_url:
-            host = os.environ.get("PGHOST", "")
-            port = os.environ.get("PGPORT", "5432")
-            user = os.environ.get("PGUSER", "")
-            password = os.environ.get("PGPASSWORD", "")
-            database = os.environ.get("PGDATABASE", "")
-            if host and user and password and database:
-                self.candle_db_url = (
-                    f"postgresql://{user}:{password}@{host}:{port}/{database}"
-                )
-            else:
-                raise ValueError(
-                    "Database URL not configured: set CANDLE_DB_URL or the "
-                    "PGHOST/PGPORT/PGUSER/PGPASSWORD/PGDATABASE variables."
-                )
-        return self
 
     @property
     def is_production(self) -> bool:
