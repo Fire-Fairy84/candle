@@ -212,6 +212,52 @@ async def get_recent_alert(
     return result.scalar_one_or_none()
 
 
+async def get_pair_by_id(
+    session: AsyncSession,
+    pair_id: int,
+) -> TradingPair | None:
+    """Return a TradingPair by primary key with its exchange eagerly loaded, or None.
+
+    Args:
+        session: Active async database session.
+        pair_id: Primary key of the TradingPair.
+
+    Returns:
+        The TradingPair instance with .exchange populated, or None if not found.
+    """
+    result = await session.execute(
+        select(TradingPair)
+        .where(TradingPair.id == pair_id)
+        .options(joinedload(TradingPair.exchange))
+    )
+    return result.scalar_one_or_none()
+
+
+async def get_recent_alerts(
+    session: AsyncSession,
+    limit: int = 50,
+) -> list[Alert]:
+    """Return the most recent Alert records, newest first, with rule and pair loaded.
+
+    Args:
+        session: Active async database session.
+        limit: Maximum number of alerts to return. Defaults to 50.
+
+    Returns:
+        List of Alert instances with .rule and .pair.exchange populated.
+    """
+    result = await session.execute(
+        select(Alert)
+        .options(
+            joinedload(Alert.rule),
+            joinedload(Alert.pair).joinedload(TradingPair.exchange),
+        )
+        .order_by(Alert.triggered_at.desc())
+        .limit(limit)
+    )
+    return list(result.scalars().all())
+
+
 async def mark_alert_sent(session: AsyncSession, alert_id: int) -> None:
     """Mark an alert as sent after successful Telegram delivery.
 

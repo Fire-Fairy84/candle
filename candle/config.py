@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     default_timeframe: str = "4h"
     alert_dedup_hours: int = 4
 
+    # API
+    api_key: str = ""
+
     # App
     env: str = "development"
 
