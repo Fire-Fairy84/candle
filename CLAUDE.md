@@ -12,9 +12,8 @@ computes technical indicators, evaluates configurable screening conditions, and
 delivers alerts via Telegram. Designed as a portfolio project with a clear path
 toward a deployable product.
 
-**Current phase:** Phase 1 — Backend core (data pipeline + indicators + screener engine)  
-**Next phase:**    Phase 2 — Telegram alerts + scheduling  
-**Future phase:**  Phase 3 — REST API + frontend dashboard  
+**Current phase:** Phase 3 — REST API + frontend dashboard
+**Completed:**     Phase 1 (backend core) + Phase 2 (alerts + scheduling + Railway deploy)
 
 ---
 
@@ -262,24 +261,25 @@ python -m candle.scheduler.jobs --once
 ## Phase checklist
 
 ### Phase 1 — Backend core
-- [ ] Project scaffolding + pyproject.toml
-- [ ] Docker-compose with PostgreSQL
-- [ ] Config via pydantic-settings
-- [ ] ccxt exchange factory
-- [ ] OHLCV fetcher for Binance / Kraken / Coinbase
-- [ ] DataFrame normalizer
-- [ ] EMA, RSI, VWAP indicators
-- [ ] Alembic models + initial migration
-- [ ] Repository layer (save candles, read candles)
-- [ ] Screener engine with 2 working rules
-- [ ] pytest suite for indicators and screener
+- [x] Project scaffolding + pyproject.toml
+- [x] Docker-compose with PostgreSQL
+- [x] Config via pydantic-settings
+- [x] ccxt exchange factory
+- [x] OHLCV fetcher for Binance / Kraken / Coinbase
+- [x] DataFrame normalizer
+- [x] EMA, RSI, VWAP indicators
+- [x] Alembic models + initial migration
+- [x] Repository layer (save candles, read candles)
+- [x] Screener engine with 2 working rules
+- [x] pytest suite for indicators and screener
 
 ### Phase 2 — Alerts + scheduling
-- [ ] Telegram bot setup
-- [ ] Alert formatter and sender
-- [ ] APScheduler jobs wired to fetcher + screener
-- [ ] Alert persistence in DB
-- [ ] Deduplication (no re-alert for same condition within N hours)
+- [x] Telegram bot setup
+- [x] Alert formatter and sender
+- [x] APScheduler jobs wired to fetcher + screener
+- [x] Alert persistence in DB
+- [x] Deduplication (no re-alert for same condition within N hours)
+- [x] Railway deploy (EU West, Dockerfile, alembic release command)
 
 ### Phase 3 — API + frontend
 - [ ] FastAPI router for pairs, candles, alerts
@@ -287,7 +287,6 @@ python -m candle.scheduler.jobs --once
 - [ ] Next.js project scaffolding
 - [ ] Price chart with indicators overlay
 - [ ] Alert history view
-- [ ] Railway deploy
 
 ---
 
