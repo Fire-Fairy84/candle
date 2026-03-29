@@ -12,7 +12,7 @@ computes technical indicators, evaluates configurable screening conditions, and
 delivers alerts via Telegram. Designed as a portfolio project with a clear path
 toward a deployable product.
 
-**Current phase:** Phase 3 — REST API + frontend dashboard
+**Current phase:** Phase 3 — REST API + frontend dashboard (nearly complete)
 **Completed:**     Phase 1 (backend core) + Phase 2 (alerts + scheduling + Railway deploy)
 
 ---
@@ -282,11 +282,14 @@ python -m candle.scheduler.jobs --once
 - [x] Railway deploy (EU West, Dockerfile, alembic release command)
 
 ### Phase 3 — API + frontend
-- [ ] FastAPI router for pairs, candles, alerts
-- [ ] Authentication (API key, simple)
-- [ ] Next.js project scaffolding
-- [ ] Price chart with indicators overlay
-- [ ] Alert history view
+- [x] FastAPI router for pairs, candles, alerts
+- [x] Authentication (API key, simple)
+- [x] Next.js project scaffolding
+- [x] Price chart with indicators overlay
+- [x] Alert history view
+- [x] Dashboard with live price, change %, RSI per pair
+- [x] Rich alert messages with real indicator values
+- [ ] Deploy frontend to Railway
 
 ---
 
@@ -335,4 +338,4 @@ Never regenerate them automatically — fixtures must be stable and committed to
 
 ---
 
-*Last updated: 2026-03-24 — Phase 1 not started*
+*Last updated: 2026-03-30 — Phase 3 nearly complete*
