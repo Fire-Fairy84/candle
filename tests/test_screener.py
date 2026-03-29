@@ -344,11 +344,19 @@ class TestEngine:
         match = run([rule], crossover_df, "BTC/USDT", "1d")[0]
         assert match.timeframe == "1d"
 
-    def test_match_message_contains_symbol_and_rule_name(self, crossover_df):
+    def test_match_message_falls_back_to_rule_name(self, crossover_df):
+        """Unknown rule names produce the rule name as the message."""
         rule = Rule(name="My Rule", conditions=[lambda df: True])
         match = run([rule], crossover_df, "BTC/USDT", "4h")[0]
-        assert "BTC/USDT" in match.message
-        assert "My Rule" in match.message
+        assert match.message == "My Rule"
+
+    def test_known_rule_produces_rich_message(self, crossover_df):
+        """Known rule names produce a descriptive message with indicator values."""
+        crossover_df["rsi"] = 42.0  # synthetic value for template
+        rule = Rule(name="RSI Oversold", conditions=[lambda df: True])
+        match = run([rule], crossover_df, "BTC/USDT", "4h")[0]
+        assert "42.0" in match.message
+        assert "oversold" in match.message.lower()
 
     def test_only_matching_rules_returned(self, crossover_df):
         """With 3 rules where 2 match and 1 doesn't, only 2 RuleMatches returned."""

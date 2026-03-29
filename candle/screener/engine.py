@@ -28,6 +28,50 @@ class RuleMatch:
     message: str
 
 
+_MESSAGE_TEMPLATES: dict[str, str] = {
+    "EMA Crossover 9/21": "Bullish crossover detected — fast EMA crossed above slow EMA. Momentum may be shifting upward.",
+    "RSI Oversold": "RSI at {rsi:.1f} — entering oversold territory. Watch for a potential bounce.",
+    "RSI Overbought": "RSI at {rsi:.1f} — entering overbought territory. Consider taking profits or tightening stops.",
+    "Price Above VWAP": "Trading above VWAP at {close:,.2f} (VWAP {vwap:,.2f}). Intraday bias is bullish.",
+    "Volume Spike 2x": "Unusual volume detected — {ratio:.1f}x the recent average. Something is moving.",
+}
+
+
+def _build_message(rule_name: str, df: pd.DataFrame) -> str:
+    """Build a user-friendly alert message using indicator values from df.
+
+    Falls back to rule name if no template is defined.
+
+    Args:
+        rule_name: Name of the rule that fired.
+        df: DataFrame with indicator columns for value interpolation.
+
+    Returns:
+        Formatted message string.
+    """
+    template = _MESSAGE_TEMPLATES.get(rule_name)
+    if template is None:
+        return rule_name
+
+    last = df.iloc[-1]
+    values: dict[str, float] = {}
+
+    if "rsi" in df.columns:
+        values["rsi"] = float(last["rsi"])
+    if "close" in df.columns:
+        values["close"] = float(last["close"])
+    if "vwap" in df.columns:
+        values["vwap"] = float(last["vwap"])
+    if "volume" in df.columns and len(df) > 20:
+        rolling_mean = df["volume"].iloc[-21:-1].mean()
+        values["ratio"] = float(last["volume"] / rolling_mean) if rolling_mean > 0 else 0.0
+
+    try:
+        return template.format(**values)
+    except KeyError:
+        return rule_name
+
+
 def run(
     rules: list[Rule],
     df: pd.DataFrame,
@@ -54,7 +98,7 @@ def run(
                     rule=rule,
                     symbol=symbol,
                     timeframe=timeframe,
-                    message=f"[{symbol} {timeframe}] {rule.name}",
+                    message=_build_message(rule.name, df),
                 )
             )
     return matches

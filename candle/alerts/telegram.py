@@ -15,6 +15,15 @@ from candle.screener.engine import RuleMatch
 logger = logging.getLogger(__name__)
 
 
+_RULE_EMOJI: dict[str, str] = {
+    "EMA Crossover 9/21": "\U0001f504",   # arrows cycle — trend shift
+    "RSI Oversold": "\U0001f4c9",          # chart decreasing — weakness
+    "RSI Overbought": "\U0001f4c8",        # chart increasing — strength
+    "Price Above VWAP": "\U00002705",      # check mark — bullish
+    "Volume Spike 2x": "\U0001f4a5",       # boom — unusual activity
+}
+
+
 def format_message(match: RuleMatch) -> str:
     """Format a RuleMatch into a Telegram-ready message string.
 
@@ -25,9 +34,9 @@ def format_message(match: RuleMatch) -> str:
         A formatted string suitable for sending as a Telegram message.
         Uses Markdown-compatible formatting.
     """
+    emoji = _RULE_EMOJI.get(match.rule.name, "\U0001f514")  # bell fallback
     return (
-        f"\U0001f525 *{match.symbol}* `{match.timeframe}`\n"
-        f"Rule triggered: *{match.rule.name}*\n"
+        f"{emoji} *{match.symbol}* `{match.timeframe}`\n"
         f"{match.message}"
     )
 

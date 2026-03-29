@@ -33,9 +33,9 @@ class TestFormatMessage:
         """Formatted message must include the trading pair symbol."""
         assert "BTC/USDT" in format_message(sample_match)
 
-    def test_includes_rule_name(self, sample_match):
-        """Formatted message must include the rule name."""
-        assert "EMA Crossover + RSI Oversold" in format_message(sample_match)
+    def test_includes_alert_message(self, sample_match):
+        """Formatted message must include the alert description."""
+        assert "EMA 9 crossed above EMA 21" in format_message(sample_match)
 
     def test_includes_timeframe(self, sample_match):
         """Formatted message must include the timeframe."""
@@ -53,7 +53,7 @@ class TestSendAlert:
         mock_telegram.send_message.assert_called_once()
         call_kwargs = mock_telegram.send_message.call_args.kwargs
         assert "BTC/USDT" in call_kwargs["text"]
-        assert "EMA Crossover + RSI Oversold" in call_kwargs["text"]
+        assert "EMA 9 crossed above EMA 21" in call_kwargs["text"]
 
     async def test_send_alert_passes_chat_id(self, sample_match, mock_telegram, mocker):
         """send_alert must use the chat_id from settings."""

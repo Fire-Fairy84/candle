@@ -24,8 +24,9 @@ export function CandleChart({ pairId }: CandleChartProps) {
 
   const { candles, isLoading, error } = useCandles(pairId, 500);
 
+  // Create chart once the container is mounted
   useEffect(() => {
-    if (!containerRef.current) return;
+    if (!containerRef.current || chartRef.current) return;
 
     const chart = createChart(containerRef.current, {
       width: containerRef.current.clientWidth,
@@ -33,6 +34,7 @@ export function CandleChart({ pairId }: CandleChartProps) {
       layout: {
         background: { color: "transparent" },
         textColor: "#9ca3af",
+        attributionLogo: false,
       },
       grid: {
         vertLines: { color: "rgba(255,255,255,0.05)" },
@@ -75,9 +77,14 @@ export function CandleChart({ pairId }: CandleChartProps) {
     return () => {
       window.removeEventListener("resize", handleResize);
       chart.remove();
+      chartRef.current = null;
+      candleSeriesRef.current = null;
+      ema9Ref.current = null;
+      ema21Ref.current = null;
     };
-  }, []);
+  });
 
+  // Update data when candles change
   useEffect(() => {
     if (!candleSeriesRef.current || !ema9Ref.current || !ema21Ref.current) return;
     if (candles.length === 0) return;
@@ -117,8 +124,16 @@ export function CandleChart({ pairId }: CandleChartProps) {
     chartRef.current?.timeScale().fitContent();
   }, [candles]);
 
-  if (isLoading) return <ChartSkeleton />;
   if (error) return <p className="text-destructive text-sm">Failed to load chart data.</p>;
 
-  return <div ref={containerRef} className="h-[500px] w-full rounded-xl overflow-hidden" />;
+  return (
+    <div className="relative">
+      {isLoading && (
+        <div className="absolute inset-0 z-10">
+          <ChartSkeleton />
+        </div>
+      )}
+      <div ref={containerRef} className="h-[500px] w-full rounded-xl overflow-hidden" />
+    </div>
+  );
 }
