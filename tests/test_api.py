@@ -78,6 +78,37 @@ class TestListPairs:
 
 
 class TestGetPairCandles:
+    async def test_candles_requires_api_key(self, app, mocker):
+        """GET /pairs/{id}/candles without X-API-Key → 401."""
+        mocker.patch.object(settings, "api_key", "test-secret")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/pairs/1/candles")
+        assert response.status_code == 401
+
+    async def test_invalid_limit_zero_returns_422(self, app, auth_headers, mocker):
+        """limit=0 violates ge=1 → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/pairs/1/candles?limit=0", headers=auth_headers)
+        assert response.status_code == 422
+
+    async def test_invalid_limit_negative_returns_422(self, app, auth_headers, mocker):
+        """limit=-1 violates ge=1 → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/pairs/1/candles?limit=-1", headers=auth_headers)
+        assert response.status_code == 422
+
+    async def test_invalid_limit_string_returns_422(self, app, auth_headers, mocker):
+        """limit=abc is not an int → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/pairs/1/candles?limit=abc", headers=auth_headers)
+        assert response.status_code == 422
+
+    async def test_limit_over_max_returns_422(self, app, auth_headers, mocker):
+        """limit=501 violates le=500 → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/pairs/1/candles?limit=501", headers=auth_headers)
+        assert response.status_code == 422
+
     async def test_unknown_pair_returns_404(self, app, auth_headers, mocker):
         mocker.patch("candle.api.routes.pairs.get_pair_by_id", new=AsyncMock(return_value=None))
         async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
@@ -176,3 +207,47 @@ class TestListAlerts:
             response = await client.get("/api/v1/alerts", headers=auth_headers)
         assert response.status_code == 200
         assert response.json()["count"] == 0
+
+    async def test_empty_alerts_response_shape(self, app, auth_headers, mocker):
+        """Empty response must have exactly {alerts: [], count: 0}."""
+        mocker.patch("candle.api.routes.alerts.get_recent_alerts", new=AsyncMock(return_value=[]))
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/alerts", headers=auth_headers)
+        body = response.json()
+        assert body == {"alerts": [], "count": 0}
+
+    async def test_alerts_requires_api_key(self, app, mocker):
+        """GET /alerts without X-API-Key → 401."""
+        mocker.patch.object(settings, "api_key", "test-secret")
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/alerts")
+        assert response.status_code == 401
+
+    async def test_alerts_invalid_limit_returns_422(self, app, auth_headers, mocker):
+        """limit=-5 violates ge=1 → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/alerts?limit=-5", headers=auth_headers)
+        assert response.status_code == 422
+
+    async def test_alerts_limit_over_max_returns_422(self, app, auth_headers, mocker):
+        """limit=201 violates le=200 → 422."""
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            response = await client.get("/api/v1/alerts?limit=201", headers=auth_headers)
+        assert response.status_code == 422
+
+    async def test_candles_default_limit_is_100(self, app, auth_headers, mock_pair, mocker):
+        """When no limit param, the repository is called with limit=100."""
+        import pandas as pd
+
+        mock_get_candles = AsyncMock(return_value=pd.DataFrame(
+            columns=["timestamp", "open", "high", "low", "close", "volume"]
+        ))
+        mocker.patch("candle.api.routes.pairs.get_pair_by_id", new=AsyncMock(return_value=mock_pair))
+        mocker.patch("candle.api.routes.pairs.get_candles", new=mock_get_candles)
+
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+            await client.get("/api/v1/pairs/1/candles", headers=auth_headers)
+
+        mock_get_candles.assert_called_once()
+        _, kwargs = mock_get_candles.call_args
+        assert kwargs.get("limit") == 100 or mock_get_candles.call_args[0][2] == 100

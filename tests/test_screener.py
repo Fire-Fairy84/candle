@@ -120,6 +120,21 @@ class TestRsiRange:
         with pytest.raises(KeyError, match="rsi"):
             rsi_range(df, min_val=30.0, max_val=70.0)
 
+    def test_weak_bearish_zone_fires(self):
+        """RSI ~40 (typical bearish market) triggers the widened 0-45 range."""
+        df = _make_df(rsi=[39.55])
+        assert rsi_range(df, min_val=0.0, max_val=45.0) is True
+
+    def test_boundary_inclusive_upper_45(self):
+        """RSI exactly 45 → inclusive upper bound, triggers."""
+        df = _make_df(rsi=[45.0])
+        assert rsi_range(df, min_val=0.0, max_val=45.0) is True
+
+    def test_boundary_exclusive_above_45(self):
+        """RSI 46 → above the widened range, does not trigger."""
+        df = _make_df(rsi=[46.0])
+        assert rsi_range(df, min_val=0.0, max_val=45.0) is False
+
 
 # ---------------------------------------------------------------------------
 # price_above_vwap
@@ -196,10 +211,75 @@ class TestVolumeSpike:
         with pytest.raises(KeyError, match="volume"):
             volume_spike(df, multiplier=2.0)
 
+    def test_lower_multiplier_1_5_detects_moderate_spike(self):
+        """Volume at 1.6× baseline triggers multiplier=1.5."""
+        baseline = [1000.0] * 21
+        baseline[-1] = 1600.0
+        df = _make_df(volume=baseline)
+        assert volume_spike(df, multiplier=1.5) is True
+
+    def test_lower_multiplier_1_5_exact_boundary(self):
+        """Volume exactly 1.5× baseline (>= threshold) triggers."""
+        baseline = [1000.0] * 21
+        baseline[-1] = 1500.0
+        df = _make_df(volume=baseline)
+        assert volume_spike(df, multiplier=1.5) is True
+
+    def test_lower_multiplier_1_5_just_below(self):
+        """Volume at 1.49× baseline does not trigger multiplier=1.5."""
+        baseline = [1000.0] * 21
+        baseline[-1] = 1490.0
+        df = _make_df(volume=baseline)
+        assert volume_spike(df, multiplier=1.5) is False
+
 
 # ---------------------------------------------------------------------------
-# Rule
+# Rule — composed conditions
 # ---------------------------------------------------------------------------
+
+class TestRuleComposed:
+    """Tests for Rule with real condition functions (production-like configurations)."""
+
+    def test_rsi_weak_and_volume_spike_both_met(self):
+        """Rule with RSI(0-45) AND volume_spike(1.5) fires when both conditions hold."""
+        volumes = [1000.0] * 21
+        volumes[-1] = 1600.0
+        df = _make_df(rsi=[40.0] * 21, volume=volumes)
+        rule = Rule(
+            name="Bearish + Volume",
+            conditions=[
+                partial(rsi_range, min_val=0.0, max_val=45.0),
+                partial(volume_spike, multiplier=1.5),
+            ],
+        )
+        assert rule.evaluate(df) is True
+
+    def test_rsi_weak_met_but_no_volume_spike(self):
+        """Rule requires both — RSI in range but normal volume → False."""
+        df = _make_df(rsi=[40.0] * 21, volume=[1000.0] * 21)
+        rule = Rule(
+            name="Bearish + Volume",
+            conditions=[
+                partial(rsi_range, min_val=0.0, max_val=45.0),
+                partial(volume_spike, multiplier=1.5),
+            ],
+        )
+        assert rule.evaluate(df) is False
+
+    def test_volume_spike_met_but_rsi_out_of_range(self):
+        """Rule requires both — volume spikes but RSI too high → False."""
+        volumes = [1000.0] * 21
+        volumes[-1] = 1600.0
+        df = _make_df(rsi=[55.0] * 21, volume=volumes)
+        rule = Rule(
+            name="Bearish + Volume",
+            conditions=[
+                partial(rsi_range, min_val=0.0, max_val=45.0),
+                partial(volume_spike, multiplier=1.5),
+            ],
+        )
+        assert rule.evaluate(df) is False
+
 
 class TestRule:
     def test_returns_true_when_all_conditions_pass(self):
