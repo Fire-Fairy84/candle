@@ -5,8 +5,15 @@
 Fetches OHLCV data from multiple exchanges on a schedule, computes technical indicators, evaluates configurable screening rules, and delivers alerts via Telegram. Includes a REST API and a Next.js dashboard.
 
 ![Python](https://img.shields.io/badge/python-3.12+-blue)
+![Tests](https://img.shields.io/badge/tests-74%20passing-brightgreen)
 ![Deploy](https://img.shields.io/badge/deploy-Railway-blueviolet)
 ![License](https://img.shields.io/badge/license-MIT-green)
+
+---
+
+## Why this project exists
+
+Most crypto alert tools are black boxes: you configure a rule in a UI and hope it fires correctly. Candle's screening rules are explicit Python functions with real test fixtures — every condition is readable, testable, and version-controlled. The entire stack runs on infrastructure you control, with no dependency on third-party SaaS beyond the exchange APIs themselves.
 
 ---
 
@@ -57,6 +64,22 @@ Fetches OHLCV data from multiple exchanges on a schedule, computes technical ind
 ```
 
 Data flows in one direction: exchange → DB → screener → alert. The API and frontend are read-only consumers. No layer knows about the layer above it.
+
+---
+
+## How it works
+
+**End-to-end example: EMA crossover on BTC/USDT 4h**
+
+1. `fetch_job` runs at 20:00 UTC. It calls `ccxt.binance.fetch_ohlcv("BTC/USDT", "4h")`, normalizes the response into a DataFrame, and upserts the latest candle into `candles`.
+
+2. `screen_job` runs immediately after. For every active pair, it loads the last N candles from the DB, computes EMA 9 and EMA 21, and evaluates the `EMA Crossover 9/21` rule: the previous candle had EMA 9 below EMA 21, the current candle has EMA 9 above.
+
+3. The engine returns a `RuleMatch`. Before firing, it checks the `alerts` table — if the same rule fired on the same pair within the last 4 hours, it's skipped.
+
+4. A new `Alert` row is persisted. The Telegram sender formats the message with the current close price, EMA values, and RSI, and calls `bot.send_message()`.
+
+5. The alert arrives in Telegram within seconds of the 20:00 candle closing. No polling, no webhook — the scheduler drives everything.
 
 ---
 
@@ -263,66 +286,132 @@ curl "http://localhost:8000/api/v1/alerts?limit=2" \
 
 ---
 
-## Project structure
+### Errors
+
+All error responses use this shape:
+
+```json
+{ "detail": "human-readable description" }
+```
+
+| Status | Cause                                                              |
+|--------|--------------------------------------------------------------------|
+| `401`  | `X-API-Key` header missing or does not match the configured key   |
+| `422`  | Invalid query parameter (e.g. `limit=0`, `limit=abc`, `limit=501`) |
+| `429`  | Rate limit exceeded for this IP on this endpoint                  |
+| `500`  | Unhandled server error — check logs                               |
+
+Example 401 response:
+
+```json
+{ "detail": "Invalid or missing API key" }
+```
+
+Example 422 response:
+
+```json
+{
+  "detail": [
+    {
+      "type": "greater_than_equal",
+      "loc": ["query", "limit"],
+      "msg": "Input should be greater than or equal to 1",
+      "input": "0"
+    }
+  ]
+}
+```
+
+---
+
+## Security
+
+A full audit is documented in [`docs/security-audit.md`](docs/security-audit.md). Controls currently in place:
+
+- **Timing-safe API key comparison** — `secrets.compare_digest()` prevents timing attacks on the auth header
+- **Rate limiting** — per-IP limits on all endpoints via slowapi (30–60 req/min)
+- **Non-root Docker container** — `USER appuser` in the Dockerfile
+- **Read-only exchange keys** — ccxt instances are initialized without trading permissions; the codebase has no order-placement functions
+- **Secrets never logged** — DB connection URLs are sanitized before any log output; no credentials appear in stack traces
+- **Proxy input validation** — the Next.js API proxy whitelists allowed path prefixes and query parameters before forwarding requests to the backend
+
+---
+
+## Project structure (by responsibility)
 
 ```
 candle/
 ├── candle/                      # Main Python package
-│   ├── config.py                # Single Settings instance — all config lives here
-│   ├── data/
-│   │   ├── fetcher.py           # ccxt wrapper — fetch_ohlcv per exchange/pair
-│   │   ├── normalizer.py        # Raw ccxt response → clean DataFrame
-│   │   └── exchange_factory.py  # Builds read-only ccxt instances from config
-│   ├── indicators/              # Pure functions: DataFrame in, Series out, no side effects
-│   │   ├── trend.py             # EMA, SMA, MACD
+│   ├── config.py                # Owns all configuration — single Settings instance,
+│   │                            #   validated at startup; the only place env vars are read
+│   ├── data/                    # Responsible for exchange I/O only
+│   │   ├── fetcher.py           # Asks ccxt for OHLCV data; handles NetworkError,
+│   │   │                        #   ExchangeError, RateLimitExceeded on every call
+│   │   ├── normalizer.py        # Converts raw ccxt lists to a typed DataFrame;
+│   │   │                        #   knows nothing about the DB or indicators
+│   │   └── exchange_factory.py  # Constructs read-only ccxt instances from config;
+│   │                            #   no trading permissions, no API keys required
+│   ├── indicators/              # Pure computation — no I/O, no DB, no logging
+│   │   ├── trend.py             # EMA, SMA, MACD — same input always returns same output
 │   │   ├── momentum.py          # RSI, Stochastic
 │   │   └── volume.py            # VWAP, OBV
-│   ├── screener/
-│   │   ├── conditions.py        # Primitive condition functions (crossover, threshold, etc.)
-│   │   ├── rules.py             # Rule dataclass — composes conditions with AND logic
-│   │   └── engine.py            # Evaluates rules against DataFrames, builds alert messages
-│   ├── alerts/
-│   │   └── telegram.py          # Formats and sends alert messages via python-telegram-bot
-│   ├── db/
-│   │   ├── models.py            # SQLAlchemy ORM models — data containers only
-│   │   ├── session.py           # Async engine and session factory
-│   │   └── repository.py        # All DB queries — no raw SQL outside this module
-│   ├── api/
-│   │   ├── app.py               # FastAPI factory — registers routers and middleware
-│   │   ├── auth.py              # X-API-Key dependency with constant-time comparison
-│   │   ├── limiter.py           # Shared slowapi Limiter instance
-│   │   ├── schemas.py           # Pydantic response models
+│   ├── screener/                # Responsible for deciding whether conditions are met
+│   │   ├── conditions.py        # Atomic condition primitives — each returns a bool
+│   │   ├── rules.py             # Rule dataclass — composes conditions with AND logic;
+│   │   │                        #   adding a rule is adding a Rule() instance here
+│   │   └── engine.py            # Iterates rules over DataFrames; builds the human-readable
+│   │                            #   alert message using real indicator values
+│   ├── alerts/                  # Responsible for notification delivery only
+│   │   └── telegram.py          # Formats messages with emoji + context;
+│   │                            #   never called directly from the screener
+│   ├── db/                      # Responsible for persistence
+│   │   ├── models.py            # ORM models — data containers only, no business logic
+│   │   ├── session.py           # Async engine factory; sanitizes credentials from logs
+│   │   └── repository.py        # Every DB query lives here — no SQLAlchemy outside
+│   │                            #   this module, no raw SQL anywhere in the codebase
+│   ├── api/                     # Responsible for the HTTP interface
+│   │   ├── app.py               # FastAPI factory — wires routers, rate limiter, lifespan
+│   │   ├── auth.py              # X-API-Key validation using secrets.compare_digest;
+│   │   │                        #   auth is skipped when API_KEY is unset (local dev)
+│   │   ├── limiter.py           # Shared Limiter instance — extracted to avoid circular
+│   │   │                        #   imports between app.py and route modules
+│   │   ├── schemas.py           # Pydantic response models — the contract for API consumers
 │   │   └── routes/
-│   │       ├── pairs.py         # GET /pairs, GET /pairs/{id}/candles
-│   │       └── alerts.py        # GET /alerts
+│   │       ├── pairs.py         # /pairs and /pairs/{id}/candles — computes indicators
+│   │       │                    #   on the fly; rate-limited at 60 and 30 req/min
+│   │       └── alerts.py        # /alerts — read-only alert history; 60 req/min
 │   └── scheduler/
-│       └── jobs.py              # APScheduler job definitions (fetch + screen cycles)
+│       └── jobs.py              # Owns the fetch → screen → alert cycle timing;
+│                                #   the only place APScheduler is configured
 │
 ├── frontend/                    # Next.js 14 dashboard
 │   └── src/
-│       ├── app/                 # App Router pages
-│       │   ├── page.tsx         # Dashboard — pair cards with live price/RSI
-│       │   ├── alerts/          # Alert history table
-│       │   └── pairs/[id]/      # Pair detail with candlestick chart
+│       ├── app/
+│       │   ├── page.tsx         # Dashboard — pair grid with live price, change %, RSI
+│       │   ├── api/candle/      # Server-side proxy — validates paths and params before
+│       │   │                    #   forwarding to the backend with the server API key
+│       │   ├── alerts/          # Alert history with category badges and relative timestamps
+│       │   └── pairs/[id]/      # Pair detail — candlestick chart with EMA overlays
 │       ├── components/
-│       │   ├── chart/           # TradingView Lightweight Charts wrapper
-│       │   ├── pairs/           # PairCard, PairsList
-│       │   └── alerts/          # AlertsTable with category badges
-│       └── lib/
-│           └── hooks/           # SWR hooks: usePairs, useCandles, useAlerts
+│       │   ├── chart/           # TradingView Lightweight Charts v5 wrapper;
+│       │   │                    #   handles mount race condition and cleanup
+│       │   ├── pairs/           # PairCard (live data via SWR), PairsList
+│       │   └── alerts/          # AlertsTable — rule category color coding
+│       └── lib/hooks/           # SWR data hooks — usePairs, useCandles, useAlerts;
+│                                #   all poll every 30 s
 │
-├── migrations/                  # Alembic versions
-├── tests/                       # 74 tests — indicators, screener, API, alerts
-│   └── fixtures/                # Real OHLCV CSVs with known signals — never regenerated
+├── migrations/                  # Alembic migration history — the only way to change schema
+├── tests/                       # 74 tests across indicators, screener, API, alerts
+│   └── fixtures/                # Real OHLCV CSVs downloaded once; stable, never regenerated
 ├── scripts/
-│   ├── seed.py                  # Seeds exchanges and trading pairs
-│   └── seed_pairs.py            # Adds additional pairs idempotently
+│   ├── seed.py                  # One-time setup: creates exchanges and initial pairs
+│   └── seed_pairs.py            # Idempotent: adds new pairs without duplicating existing
 ├── docs/
-│   ├── refactor-report.md       # Backend code review — quick wins and refactors
-│   └── security-audit.md        # Pre-production security audit
-├── serve.py                     # Entrypoint — starts scheduler or API based on args
-├── docker-compose.yml           # PostgreSQL for local dev
-└── pyproject.toml               # Single source of truth for deps and tooling
+│   ├── refactor-report.md       # Prioritized backend refactor opportunities
+│   └── security-audit.md        # Pre-production security review with 18 findings
+├── serve.py                     # Process entrypoint — selects scheduler or API mode
+├── docker-compose.yml           # PostgreSQL for local dev; app runs outside the container
+└── pyproject.toml               # Deps, build config, pytest settings — single source of truth
 ```
 
 ---
