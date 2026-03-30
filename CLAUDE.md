@@ -12,8 +12,8 @@ computes technical indicators, evaluates configurable screening conditions, and
 delivers alerts via Telegram. Designed as a portfolio project with a clear path
 toward a deployable product.
 
-**Current phase:** Phase 3 — REST API + frontend dashboard (nearly complete)
-**Completed:**     Phase 1 (backend core) + Phase 2 (alerts + scheduling + Railway deploy)
+**Current phase:** v1.1 — observability, refactor, and frontend improvements
+**Completed:**     Phase 1 (backend core) + Phase 2 (alerts + scheduling + Railway deploy) + Phase 3 (API + frontend dashboard)
 
 ---
 
@@ -38,7 +38,7 @@ toward a deployable product.
 
 | Layer              | Technology              | Notes                                   |
 |--------------------|-------------------------|-----------------------------------------|
-| Language           | Python 3.11+            | Type hints on every function            |
+| Language           | Python 3.12+            | Type hints on every function            |
 | Exchange connector | ccxt 4.x                | Unified API — Binance, Kraken, Coinbase |
 | Indicators         | pandas-ta               | Built on pandas DataFrames              |
 | ORM                | SQLAlchemy 2.x (async)  | Async session everywhere                |
@@ -46,24 +46,26 @@ toward a deployable product.
 | Scheduler          | APScheduler             | Drives fetch + screen cycles            |
 | Alerts             | python-telegram-bot     | Async client, no blocking calls         |
 | Config             | pydantic-settings       | Typed config loaded from .env           |
-| Testing            | pytest + pytest-asyncio | Core logic requires tests               |
+| API                | FastAPI + uvicorn       | REST API with API key auth              |
+| Rate limiting      | slowapi                 | Per-IP limits on all endpoints          |
+| Testing            | pytest + pytest-asyncio | 74 tests; real DB fixtures              |
 
 ### Infrastructure
 
-| Layer            | Technology                      |
-|------------------|---------------------------------|
-| Database         | PostgreSQL 15+                  |
-| Local dev        | Docker + docker-compose         |
-| Deploy (planned) | Railway — simplest first deploy |
+| Layer      | Technology              |
+|------------|-------------------------|
+| Database   | PostgreSQL 15+          |
+| Local dev  | Docker + docker-compose |
+| Deploy     | Railway (EU West)       |
 
-### Frontend (Phase 3 — not started yet)
+### Frontend (complete)
 
-| Layer      | Technology                     |
-|------------|--------------------------------|
-| Framework  | Next.js 14 (App Router)        |
-| Styling    | Tailwind CSS + shadcn/ui       |
-| Charts     | TradingView Lightweight Charts |
-| Data fetch | SWR                            |
+| Layer      | Technology                          |
+|------------|-------------------------------------|
+| Framework  | Next.js 14 (App Router)             |
+| Styling    | Tailwind CSS + shadcn/ui            |
+| Charts     | TradingView Lightweight Charts v5   |
+| Data fetch | SWR (auto-refresh every 30 s)       |
 
 ---
 
@@ -73,9 +75,10 @@ toward a deployable product.
 candle/
 ├── CLAUDE.md                    # This file — always read before doing anything
 ├── README.md
+├── serve.py                     # Process entrypoint — scheduler or API mode
 ├── .env                         # Never commit
 ├── .env.example                 # Committed — all keys with placeholder values
-├── docker-compose.yml           # PostgreSQL + app for local dev
+├── docker-compose.yml           # PostgreSQL for local dev
 ├── pyproject.toml               # Single source of truth for deps and tooling
 ├── alembic.ini
 │
@@ -84,46 +87,71 @@ candle/
 │   ├── config.py                # Single Settings instance via pydantic-settings
 │   │
 │   ├── data/                    # Fetching layer — talks to exchanges
-│   │   ├── __init__.py
 │   │   ├── fetcher.py           # ccxt wrapper — fetch_ohlcv per exchange/pair
 │   │   ├── normalizer.py        # Raw ccxt output → clean DataFrame
-│   │   └── exchange_factory.py  # Builds ccxt exchange instances from config
+│   │   └── exchange_factory.py  # Builds read-only ccxt instances from config
 │   │
-│   ├── indicators/              # Pure functions. Input: DataFrame. Output: DataFrame
-│   │   ├── __init__.py
+│   ├── indicators/              # Pure functions. Input: DataFrame. Output: Series
 │   │   ├── trend.py             # EMA, SMA, MACD
 │   │   ├── momentum.py          # RSI, Stochastic
-│   │   └── volume.py            # VWAP, OBV, CVD
+│   │   └── volume.py            # VWAP, OBV
 │   │
 │   ├── screener/                # Evaluation engine
-│   │   ├── __init__.py
 │   │   ├── conditions.py        # Condition primitives (crossover, threshold, etc.)
-│   │   ├── rules.py             # Composable rule definitions
-│   │   └── engine.py            # Runs rules against indicator output
+│   │   ├── rules.py             # Rule dataclass — composes conditions with AND logic
+│   │   └── engine.py            # Runs rules, builds alert messages with indicator values
 │   │
 │   ├── alerts/                  # Notification layer
-│   │   ├── __init__.py
 │   │   └── telegram.py          # Formats and sends alert messages
 │   │
 │   ├── db/                      # Database layer
-│   │   ├── __init__.py
-│   │   ├── models.py            # SQLAlchemy ORM models
+│   │   ├── models.py            # SQLAlchemy ORM models — data containers only
 │   │   ├── session.py           # Async engine + session factory
 │   │   └── repository.py        # All DB queries go here — no raw SQL elsewhere
 │   │
+│   ├── api/                     # REST API
+│   │   ├── app.py               # FastAPI factory — routers, rate limiter, lifespan
+│   │   ├── auth.py              # X-API-Key dependency (secrets.compare_digest)
+│   │   ├── limiter.py           # Shared slowapi Limiter instance
+│   │   ├── schemas.py           # Pydantic response models
+│   │   └── routes/
+│   │       ├── pairs.py         # GET /pairs, GET /pairs/{id}/candles
+│   │       └── alerts.py        # GET /alerts
+│   │
 │   └── scheduler/               # Task orchestration
-│       ├── __init__.py
-│       └── jobs.py              # APScheduler job definitions
+│       └── jobs.py              # APScheduler job definitions (fetch + screen cycles)
+│
+├── frontend/                    # Next.js 14 dashboard
+│   └── src/
+│       ├── app/
+│       │   ├── page.tsx         # Dashboard — pair cards with live price/RSI
+│       │   ├── api/candle/      # Server-side proxy with path/param whitelist
+│       │   ├── alerts/          # Alert history table
+│       │   └── pairs/[id]/      # Pair detail with candlestick chart
+│       ├── components/
+│       │   ├── chart/           # TradingView Lightweight Charts wrapper
+│       │   ├── pairs/           # PairCard, PairsList
+│       │   └── alerts/          # AlertsTable with category badges
+│       └── lib/hooks/           # SWR hooks: usePairs, useCandles, useAlerts
 │
 ├── migrations/                  # Alembic migration files
 │   └── versions/
+│
+├── scripts/
+│   ├── seed.py                  # Seeds exchanges and initial trading pairs
+│   └── seed_pairs.py            # Adds pairs idempotently (get-or-create)
+│
+├── docs/
+│   ├── refactor-report.md       # Backend code review — prioritized quick wins
+│   └── security-audit.md        # Pre-production security audit (18 findings)
 │
 └── tests/
     ├── conftest.py              # Shared fixtures (test DB, mock exchange, etc.)
     ├── test_fetcher.py
     ├── test_indicators.py
     ├── test_screener.py
-    └── test_alerts.py
+    ├── test_alerts.py
+    └── test_api.py
 ```
 
 ---
@@ -182,6 +210,9 @@ Conditions are composable with AND logic. OR logic comes in Phase 2.
 # PostgreSQL
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/candle
 
+# API
+API_KEY=                         # Shared secret for X-API-Key header. Empty = auth disabled (local dev only)
+
 # Exchanges (all optional for public OHLCV data)
 BINANCE_API_KEY=
 BINANCE_API_SECRET=
@@ -198,6 +229,7 @@ TELEGRAM_CHAT_ID=
 FETCH_INTERVAL_MINUTES=60
 SCREEN_INTERVAL_MINUTES=60
 DEFAULT_TIMEFRAME=4h
+ALERT_DEDUP_HOURS=4              # Suppress re-alerts for the same rule+pair within N hours
 ```
 
 ---
@@ -252,8 +284,11 @@ alembic upgrade head
 # Run tests
 pytest
 
-# Run scheduler manually (development)
-python -m candle.scheduler.jobs --once
+# Run scheduler (fetches + screens on interval)
+python serve.py
+
+# Run API server (development)
+python serve.py --api
 ```
 
 ---
@@ -353,11 +388,10 @@ Never regenerate them automatically — fixtures must be stable and committed to
 
 ---
 
-## Open questions (resolve before Phase 3)
+## Open questions
 
-- Authentication strategy if moving toward multi-user SaaS
+- Authentication strategy if moving toward multi-user SaaS (current: single shared API key)
 - Whether to use Supabase instead of raw PostgreSQL for easier auth
-- Frontend charting library: TradingView Lightweight Charts vs Recharts
 - Pricing model if monetizing
 
 ---
