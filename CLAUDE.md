@@ -289,7 +289,31 @@ python -m candle.scheduler.jobs --once
 - [x] Alert history view
 - [x] Dashboard with live price, change %, RSI per pair
 - [x] Rich alert messages with real indicator values
-- [ ] Deploy frontend to Railway
+- [x] Deploy frontend to Railway
+
+---
+
+## v1.1 Roadmap
+
+### Observabilidad
+- [ ] Structured logging (JSON) en backend para Railway Log Explorer
+- [ ] Alertas de scheduler caído — detectar si fetch_job o screen_job no se ejecutan en el intervalo esperado y notificar por Telegram
+
+### Refactor
+- [ ] Aplicar quick wins del `docs/refactor-report.md` (ver prioridades allí)
+- [ ] CORS middleware y security headers (pendientes del `docs/security-audit.md`)
+- [ ] Health check endpoint (`GET /health`) para Railway y monitores externos
+- [ ] Request audit log middleware
+
+### Frontend
+- [ ] Mejorar diseño general del dashboard — layout, tipografía, dark mode consistente
+- [ ] Página de configuración: gestionar pares activos (activar/desactivar) y reglas del screener (activar/desactivar, editar umbrales)
+
+### Alertas Telegram enriquecidas
+- [ ] Incluir en cada mensaje: precio actual, % cambio respecto a la vela anterior, RSI, VWAP, volumen relativo (ratio vs media), exchange, timestamp UTC
+
+### Tests
+- [ ] Tests E2E con Playwright — flujo completo: dashboard carga pares, pinchar par abre gráfico, tabla de alertas muestra entradas
 
 ---
 
@@ -338,4 +362,4 @@ Never regenerate them automatically — fixtures must be stable and committed to
 
 ---
 
-*Last updated: 2026-03-30 — Phase 3 nearly complete*
+*Last updated: 2026-03-30 — Phase 3 complete, v1.1 roadmap defined*
