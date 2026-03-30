@@ -2,9 +2,10 @@
 
 import math
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from candle.api.limiter import limiter
 from candle.api.auth import require_api_key
 from candle.api.schemas import (
     CandleSchema,
@@ -27,7 +28,9 @@ def _nan_to_none(value: float) -> float | None:
 
 
 @router.get("", response_model=PairsResponse, dependencies=[Depends(require_api_key)])
+@limiter.limit("60/minute")
 async def list_pairs(
+    request: Request,
     session: AsyncSession = Depends(get_session),
 ) -> PairsResponse:
     """Return all active trading pairs with their exchange."""
@@ -43,7 +46,9 @@ async def list_pairs(
     response_model=CandlesResponse,
     dependencies=[Depends(require_api_key)],
 )
+@limiter.limit("30/minute")
 async def get_pair_candles(
+    request: Request,
     pair_id: int,
     limit: int = Query(default=100, ge=1, le=500),
     session: AsyncSession = Depends(get_session),

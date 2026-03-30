@@ -1,8 +1,9 @@
 """Routes for alert history."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from candle.api.limiter import limiter
 from candle.api.auth import require_api_key
 from candle.api.schemas import AlertSchema, AlertsResponse
 from candle.db.repository import get_recent_alerts
@@ -12,7 +13,9 @@ router = APIRouter(prefix="/alerts", tags=["alerts"])
 
 
 @router.get("", response_model=AlertsResponse, dependencies=[Depends(require_api_key)])
+@limiter.limit("60/minute")
 async def list_alerts(
+    request: Request,
     limit: int = Query(default=50, ge=1, le=200),
     session: AsyncSession = Depends(get_session),
 ) -> AlertsResponse:

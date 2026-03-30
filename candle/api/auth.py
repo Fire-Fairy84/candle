@@ -1,5 +1,7 @@
 """API key authentication dependency for FastAPI routes."""
 
+import secrets
+
 from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
@@ -25,7 +27,7 @@ async def require_api_key(api_key: str | None = Security(_header_scheme)) -> str
     """
     if not settings.api_key:
         return ""
-    if api_key != settings.api_key:
+    if not secrets.compare_digest(api_key or "", settings.api_key):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or missing API key",

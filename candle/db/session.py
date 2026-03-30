@@ -48,7 +48,7 @@ def _resolve_db_url() -> str:
     for var in _DB_URL_VARS:
         url = os.environ.get(var, "")
         if url:
-            logger.info("Database URL resolved from %s", var)
+            logger.info("Database URL resolved (source: %s env var)", var)
             return url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     # 2. Try building from individual PG* variables (Railway always exposes these)
@@ -58,11 +58,12 @@ def _resolve_db_url() -> str:
     password = os.environ.get("PGPASSWORD", "")
     database = os.environ.get("PGDATABASE", "")
     if host and user and password and database:
-        logger.info("Database URL built from PGHOST/PGUSER/PGPASSWORD/PGDATABASE")
+        logger.info("Database URL resolved (source: PG* env vars, host=%s)", host)
         return f"postgresql+asyncpg://{user}:{password}@{host}:{port}/{database}"
 
     # 3. Last resort: check if pydantic-settings found it via .env file
     if settings.candle_db_url:
+        logger.info("Database URL resolved (source: pydantic-settings .env)")
         return settings.candle_db_url.replace("postgresql://", "postgresql+asyncpg://", 1)
 
     raise RuntimeError(

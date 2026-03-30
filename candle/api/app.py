@@ -5,7 +5,10 @@ from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
+from candle.api.limiter import limiter
 from candle.api.routes.alerts import router as alerts_router
 from candle.api.routes.pairs import router as pairs_router
 
@@ -31,6 +34,8 @@ def create_app() -> FastAPI:
         version="0.1.0",
         lifespan=lifespan,
     )
+    app.state.limiter = limiter
+    app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
     app.include_router(pairs_router, prefix="/api/v1")
     app.include_router(alerts_router, prefix="/api/v1")
     return app
